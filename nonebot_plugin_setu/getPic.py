@@ -39,6 +39,7 @@ async def get_url(num: int, online_switch: int, tags: list = "", r18: int = 0):
                     if flag > 10:
                         raise Exception(f"获取api内容失败次数过多，请检查网络链接")
                     res = await client.get(req_url, params=params, headers=head, timeout=10)
+                    logger.debug(res)
                     if res.status_code == 200:
                         break
                 except TimeoutException as e:
@@ -51,6 +52,7 @@ async def get_url(num: int, online_switch: int, tags: list = "", r18: int = 0):
                     raise e
             res = json.loads(res.text)
             data = res['data']
+            logger.debug(data)
             if not data:
                 return ""
             datas.extend(data)
