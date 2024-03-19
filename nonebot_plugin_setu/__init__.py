@@ -80,7 +80,7 @@ async def _(bot: Bot, event: Event):
             images.remove('r18')
         file_name = '' if Config().online_switch else images[random.randint(0, len(images) - 1)]
         pid = re.sub(r'\D+', '', file_name)
-        remain_time = 0 if event.get_user_id() in Config().super_user else UserDao().get_user_remain_time(event)
+        remain_time = 0 if event.get_user_id() in Config().super_users else UserDao().get_user_remain_time(event)
         if remain_time != 0:
             hour = int(remain_time / 3600)
             minute = int((remain_time / 60) % 60)
@@ -89,28 +89,24 @@ async def _(bot: Bot, event: Event):
         tag_flag = 0
         if bool(re.search(r"^涩图tag.+$", msg)):
             tag_flag = 1
-            tags = re.sub(r'^涩图tag', '', msg).split('和')
-            if len(tags) > 3:
+            tags = re.sub(r'^涩图tag', '', msg).replace('和', ' ')
+            try:
+                file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18)
+            except httpx.HTTPError:
                 UserDao().delete_user_cd(event.get_user_id())
-                await setu.finish('涩图tag最多只能有三个哦', at_sender=True)
-            else:
-                try:
-                    file_name = await get_url(num=1, tags=tags, online_switch=Config().online_switch, r18=r18)
-                except httpx.HTTPError:
-                    UserDao().delete_user_cd(event.get_user_id())
-                    await setu.finish(message=Message('网络错误，请重试'), at_sender=True)
-                except Exception as e:
-                    UserDao().delete_user_cd(event.get_user_id())
-                    await setu.finish(message=Message(f'{e}'), at_sender=True)
-                if Config().online_switch == 0:
-                    pid = re.sub(r'\D+', '', file_name)
-                if file_name == "":
-                    UserDao().delete_user_cd(event.get_user_id())
-                    await setu.finish('没有找到相关涩图，请更换tag', at_sender=True)
+                await setu.finish(message=Message('网络错误，请重试'), at_sender=True)
+            except Exception as e:
+                UserDao().delete_user_cd(event.get_user_id())
+                await setu.finish(message=Message(f'{e}'), at_sender=True)
+            if Config().online_switch == 0:
+                pid = re.sub(r'\D+', '', file_name)
+            if file_name == "":
+                UserDao().delete_user_cd(event.get_user_id())
+                await setu.finish('没有找到相关涩图，请更换tag', at_sender=True)
         interval = 0 if not is_group_chat else GroupDao().get_group_interval(event.group_id)
         try:
             if Config().online_switch == 1:
-                img = file_name if tag_flag == 1 else await get_url(num=1, online_switch=1, r18=r18)
+                img = file_name if tag_flag == 1 else await get_url(online_switch=1, r18=r18)
                 message_list = [MessageSegment.image(img['base64']), f"https://pixiv.net/artworks/{img['pid']}"]
                 msg_info = await send_forward_msg(bot, event, bot_name, bot.self_id, message_list, is_group_chat)
             else:

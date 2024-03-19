@@ -23,16 +23,16 @@ class ImageDao:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         for data in datas:
-            pid = data['pid']
-            uid = data['uid']
+            pid = data['id']
+            uid = data['userId']
             title = data['title']
-            author = data['author']
+            author = data['userName']
             r18 = data['r18']
             width = data['width']
             height = data['height']
             ext = data['ext']
             urls = json.dumps(data['urls'])
-            upload_date = data['uploadDate']
+            upload_date = data['updateDate']
             sql = "INSERT OR IGNORE INTO lolicon_images(pid, uid, title, author, r18, width, height, ext, urls, upload_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             cursor.execute(sql, (pid, uid, title, author, r18, width, height, ext, urls, upload_date))
             tags = data['tags']

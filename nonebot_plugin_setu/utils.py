@@ -1,7 +1,7 @@
 import os
 from typing import List
 
-from nonebot.adapters.onebot.v11 import Bot, Message, Event
+from nonebot.adapters.onebot.v11 import Bot, Message, Event, MessageSegment
 
 from .file_tools import Config
 

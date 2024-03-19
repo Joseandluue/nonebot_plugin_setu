@@ -51,6 +51,9 @@ pip install nonebot_plugin_setu -U
 
 
 首先运行一遍robot，然后在robot目录的data目录下修改setu_config.json配置文件，然后重启robot
+更改为直接去pixiv通过tag搜图返图
+在pixiv抓包version的数字串和cookie填入`getPic.py`中
+魔改过，部分命令设置或许无效，尤其是数据库写入返图信息
 
 ### 添加配置
 
