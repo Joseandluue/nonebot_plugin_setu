@@ -15,10 +15,44 @@ from .proxies import proxy_http, proxy_socks
 cookie = ''
 version = '&version=' + ''
 
+
+async def choice_picData(data):
+
+    id = data["id"]
+    artword_url = 'https://www.pixiv.net/ajax/illust/{id}/pages?lang=zh{ver}'
+    
+    headers = {
+        'referer': 'https://www.pixiv.net/artworks/117031095',
+        'cookie': cookie,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
+    }
+
+    http = proxy_http if Config().proxies_switch else None
+    socks = proxy_socks if Config().proxies_switch else None
+    async with AsyncClient(proxies=http, transport=socks) as client:
+        res = await client.get(url=artword_url.format(id=id, ver=version), headers=headers, timeout=10)
+    response = json.loads(unquote(res.text))
+    try:
+        data_urls = response["body"]
+        data_url = random.choice(data_urls)
+    except KeyError as e:
+        logger.error(f"多图索引错误：{e}")
+        raise e
+    update_data = {
+        "url": data_url["urls"]["regular"],
+        "width": data_url["width"],
+        "height": data_url["height"]
+    }
+    data.update(update_data)
+    return data
+
+
+
+
 async def get_url(online_switch: int, tags: str = "", r18: int = 0):
     safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh{ver}'
     r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh{ver}'
-    notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh&version=b7c480d166ee26f97d2d445e0a78fea97da6db63'
+    notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh{ver}'
 
     headers = {
         'referer': 'https://www.pixiv.net/',
@@ -50,7 +84,6 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 else :
                     url = safe_url if r18==0 else r18_url
                     res = await client.get(url=url.format(tag=tags, p=random.choice([1,2]), ver=version), headers=headers, timeout=10)
-                    print(url.format(tag=tags, p=random.choice([1,1])))
                 logger.debug(res)
                 if res.status_code == 200:
                     break
@@ -69,6 +102,8 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
             else:
                 data_list = response['body']['illust']['data']
             one_picData = random.choice(data_list)
+            if one_picData["pageCount"] > 1 :
+                one_picData = choice_picData(one_picData)
             one_picData['r18'] = False if r18==0 else True
             one_picData['ext'] = "jpg"
             one_picData = [one_picData]
