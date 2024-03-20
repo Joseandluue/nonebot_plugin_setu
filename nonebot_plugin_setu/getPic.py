@@ -34,10 +34,10 @@ async def choice_picData(data):
     response = json.loads(unquote(res.text))
     try:
         data_urls = response["body"]
-        data_url = random.choice(data_urls)
+        data_url = data_url = data_urls[random.randint(0,len(data_urls)) - 1]
     except KeyError as e:
         logger.error(f"多图索引错误：{e}")
-        raise e
+        raise Exception(f"多图索引错误")
     update_data = {
         "url": data_url["urls"]["regular"],
         "width": data_url["width"],
@@ -101,7 +101,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 data_list = response['body']['thumbnails']['illust']
             else:
                 data_list = response['body']['illust']['data']
-            one_picData = random.choice(data_list)
+            one_picData = data_list[random.randint(0, len(data_list) - 1)]
             if one_picData["pageCount"] > 1 :
                 one_picData = await choice_picData(one_picData)
             one_picData['r18'] = False if r18==0 else True
@@ -109,7 +109,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
             one_picData = [one_picData]
         except IndexError as e:
             logger.error(f"没有获取到与tag相关图片{e}")
-            raise e
+            raise Exception(f"没有获取到与tag相关图片")
         except Exception as e:
             logger.error(f"{e}")
             raise e
