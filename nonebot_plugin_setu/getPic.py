@@ -85,7 +85,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                     url = safe_url if r18==0 else r18_url
                     res = await client.get(url=url.format(tag=tags, p=random.choice([1,2]), ver=version), headers=headers, timeout=10)
                     if not json.loads(unquote(res.text))['body']['illust']['data']:
-                        res = client.get(url=url.format(tag=tags, p=1, ver=version), headers=headers, timeout=10)
+                        res = await client.get(url=url.format(tag=tags, p=1, ver=version), headers=headers, timeout=10)
                 logger.debug(res)
                 if res.status_code == 200:
                     break
