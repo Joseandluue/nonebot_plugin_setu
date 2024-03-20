@@ -50,8 +50,8 @@ async def choice_picData(data):
 
 
 async def get_url(online_switch: int, tags: str = "", r18: int = 0):
-    safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh'
-    r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh'
+    safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag_full&type=illust&lang=zh'
+    r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
     notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'
 
     headers = {
