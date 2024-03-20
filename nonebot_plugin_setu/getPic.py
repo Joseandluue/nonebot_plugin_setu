@@ -13,13 +13,13 @@ from .dao.image_dao import ImageDao
 from .proxies import proxy_http, proxy_socks
 
 cookie = ''
-version = '&version=' + ''
+
 
 
 async def choice_picData(data):
 
     id = data["id"]
-    artword_url = 'https://www.pixiv.net/ajax/illust/{id}/pages?lang=zh{ver}'
+    artword_url = 'https://www.pixiv.net/ajax/illust/{id}/pages?lang=zh'
     
     headers = {
         'referer': 'https://www.pixiv.net/artworks/'+id,
@@ -30,7 +30,7 @@ async def choice_picData(data):
     http = proxy_http if Config().proxies_switch else None
     socks = proxy_socks if Config().proxies_switch else None
     async with AsyncClient(proxies=http, transport=socks) as client:
-        res = await client.get(url=artword_url.format(id=id, ver=version), headers=headers, timeout=10)
+        res = await client.get(url=artword_url.format(id=id), headers=headers, timeout=10)
     response = json.loads(unquote(res.text))
     try:
         data_urls = response["body"]
@@ -50,9 +50,9 @@ async def choice_picData(data):
 
 
 async def get_url(online_switch: int, tags: str = "", r18: int = 0):
-    safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh{ver}'
-    r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh{ver}'
-    notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh{ver}'
+    safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh'
+    r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag_full&type=illust_and_ugoira&lang=zh'
+    notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'
 
     headers = {
         'referer': 'https://www.pixiv.net/',
@@ -79,13 +79,13 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 if flag > 10:
                     raise Exception(f"获取api内容失败次数过多，请检查网络链接")
                 if not tags:
-                    res = await client.get(url=notag_url.format(mode = 'all' if r18==0 else 'r18', ver=version), headers=headers, timeout=10)
+                    res = await client.get(url=notag_url.format(mode = 'all' if r18==0 else 'r18'), headers=headers, timeout=10)
                     print(notag_url.format(mode = 'all' if r18==0 else 'r18'))
                 else :
                     url = safe_url if r18==0 else r18_url
-                    res = await client.get(url=url.format(tag=tags, p=random.choice([1,2]), ver=version), headers=headers, timeout=10)
+                    res = await client.get(url=url.format(tag=tags, p=random.choice([1,2])), headers=headers, timeout=10)
                     if not json.loads(unquote(res.text))['body']['illust']['data']:
-                        res = await client.get(url=url.format(tag=tags, p=1, ver=version), headers=headers, timeout=10)
+                        res = await client.get(url=url.format(tag=tags, p=1), headers=headers, timeout=10)
                 logger.debug(res)
                 if res.status_code == 200:
                     break
