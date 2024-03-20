@@ -22,7 +22,7 @@ async def choice_picData(data):
     artword_url = 'https://www.pixiv.net/ajax/illust/{id}/pages?lang=zh{ver}'
     
     headers = {
-        'referer': 'https://www.pixiv.net/artworks/117031095',
+        'referer': 'https://www.pixiv.net/artworks/'+id,
         'cookie': cookie,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
     }
