@@ -79,11 +79,13 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 if flag > 10:
                     raise Exception(f"获取api内容失败次数过多，请检查网络链接")
                 if not tags:
-                    res = await client.get(url=notag_url.format(mode = 'all' if r18==0 else 'r18'), headers=headers, timeout=10)
+                    res = await client.get(url=notag_url.format(mode = 'all' if r18==0 else 'r18', ver=version), headers=headers, timeout=10)
                     print(notag_url.format(mode = 'all' if r18==0 else 'r18'))
                 else :
                     url = safe_url if r18==0 else r18_url
                     res = await client.get(url=url.format(tag=tags, p=random.choice([1,2]), ver=version), headers=headers, timeout=10)
+                    if not json.loads(unquote(res.text))['body']['illust']['data']:
+                        res = client.get(url=url.format(tag=tags, p=1, ver=version), headers=headers, timeout=10)
                 logger.debug(res)
                 if res.status_code == 200:
                     break
@@ -101,15 +103,14 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 data_list = response['body']['thumbnails']['illust']
             else:
                 data_list = response['body']['illust']['data']
+            if not data_list:
+                raise Exception("没有获取到与tag相关图片")
             one_picData = data_list[random.randint(0, len(data_list) - 1)]
             if one_picData["pageCount"] > 1 :
                 one_picData = await choice_picData(one_picData)
             one_picData['r18'] = False if r18==0 else True
             one_picData['ext'] = "jpg"
             one_picData = [one_picData]
-        except IndexError as e:
-            logger.error(f"没有获取到与tag相关图片{e}")
-            raise Exception(f"没有获取到与tag相关图片")
         except Exception as e:
             logger.error(f"{e}")
             raise e
