@@ -14,7 +14,7 @@ from .proxies import proxy_http, proxy_socks
 
 cookie = ''
 
-
+ban_tags = Config().ban_tags
 
 async def choice_picData(data):
 
@@ -47,7 +47,15 @@ async def choice_picData(data):
     return data
 
 
-
+async def isban(data):
+    count = 0
+    while count < 3:
+        one_picData = data[random.randint(0, len(data) - 1)]
+        tags = one_picData.get("tag", [])
+        if not any(tag in tags for tag in ban_tags):
+            return one_picData
+        count += 1
+    return None
 
 async def get_url(online_switch: int, tags: str = "", r18: int = 0):
     safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
@@ -105,11 +113,12 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 data_list = response['body']['illust']['data']
             if not data_list:
                 raise Exception("没有获取到与tag相关图片")
-            one_picData = data_list[random.randint(0, len(data_list) - 1)]
+            one_picData = await isban(data_list)
             if one_picData["pageCount"] > 1 :
                 one_picData = await choice_picData(one_picData)
-            one_picData['r18'] = False if r18==0 else True
-            one_picData['ext'] = "jpg"
+            if one_picData:
+                one_picData['r18'] = False if r18==0 else True
+                one_picData['ext'] = "jpg"
             one_picData = [one_picData]
         except Exception as e:
             logger.error(f"{e}")
