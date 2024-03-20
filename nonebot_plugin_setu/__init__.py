@@ -36,6 +36,7 @@ msg_ban_tag = on_regex(r"^添加ban|^删除tag.+$")
 see_ban_tag = on_regex(r"^查看禁tag$")
 
 super_user = Config().super_users
+ban_tags = Config().ban_tags
 driver = get_driver()
 driver.server_app.mount('/setu', setu_api, name='setu_plugin')
 
@@ -91,7 +92,12 @@ async def _(bot: Bot, event: Event):
         tag_flag = 0
         if bool(re.search(r"^涩图tag.+$", msg)):
             tag_flag = 1
+            msg = msg.replace(" ", "")
             tags = re.sub(r'^涩图tag', '', msg).replace('和', ' ')
+            tags_list = tags.split()
+            for tag in tags_list:
+                if tag in ban_tags:
+                    await setu.finish(message=Message(f'阔诺雅鹿`{tag}` 打咩desu'), at_sender=True)
             try:
                 file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18)
             except httpx.HTTPError:
