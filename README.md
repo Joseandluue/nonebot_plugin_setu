@@ -87,7 +87,7 @@ pip install nonebot_plugin_setu -U
 | 涩图帮助                             | 涩图帮助                              | 获取命令列表                                                                               |
 | 涩图转发者名字                          | 涩图转发者名字bot                        | 修改发送转发消息时的转发者名字                                                                      |
 | 添加/删除ban                             | 添加/删除ban3d                        | 添加/删除禁止匹配自定义tag的插画                                                                             |
-| 查看禁tag                             | 查看禁tag                        | 查看当前被ban的tag                                                           |
+| 查看ban                           | 查看ban                      | 查看当前被ban的tag                                                           |
 
 #### 注：
 

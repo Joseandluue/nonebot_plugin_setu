@@ -32,8 +32,8 @@ withdraw_interval = on_regex(r"^撤回间隔0$|^撤回间隔[1-9]\d*$")
 r18_switch = on_regex(r"^开启涩涩$|^关闭涩涩$|^开启私聊涩涩$|^关闭私聊涩涩$")
 setu_help = on_regex(r"^涩图帮助$")
 msg_forward_name = on_regex(r"^涩图转发者名字.+$")
-msg_ban_tag = on_regex(r"^添加ban|^删除tag.+$")
-see_ban_tag = on_regex(r"^查看禁tag$")
+msg_ban_tag = on_regex(r"^添加ban|^删除ban.+$")
+see_ban_tag = on_regex(r"^查看ban$")
 
 super_user = Config().super_users
 ban_tags = Config().ban_tags
@@ -148,13 +148,13 @@ async def _(bot: Bot, event: Event):
     if event.get_user_id() in super_user:
         msg = event.get_plaintext()
         if msg.startswith("添加ban"):
-            ban_tag = re.sub(r"^添加ban", '', msg)
-            Config.set_ban_args('ban_tags', ban_tag)
-            await bot.send(message=f"添加禁tag：{ban_tag}成功", event=event, at_sender=True)
-        elif msg.startswith("删除tag"):
+            add_tag = re.sub(r"^添加ban", '', msg)
+            Config.set_ban_args('ban_tags', add_tag)
+            await bot.send(message=f"添加禁tag：{add_tag}成功", event=event, at_sender=True)
+        elif msg.startswith("删除ban"):
             del_tag = re.sub(r"^删除ban", '', msg)
             Config.del_ban_args('ban_tags', del_tag)
-            await bot.send(message=f"删除被禁tag：{ban_tag}成功", event=event, at_sender=True)
+            await bot.send(message=f"删除被禁tag：{del_tag}成功", event=event, at_sender=True)
     else:
         await msg_forward_name.send("只有主人才有权限哦", at_sender=True)
 
