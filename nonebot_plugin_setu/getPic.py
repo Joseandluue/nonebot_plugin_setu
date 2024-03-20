@@ -103,7 +103,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 data_list = response['body']['illust']['data']
             one_picData = random.choice(data_list)
             if one_picData["pageCount"] > 1 :
-                one_picData = choice_picData(one_picData)
+                one_picData = await choice_picData(one_picData)
             one_picData['r18'] = False if r18==0 else True
             one_picData['ext'] = "jpg"
             one_picData = [one_picData]
