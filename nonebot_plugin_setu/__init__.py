@@ -158,7 +158,9 @@ async def _(bot: Bot, event: Event):
         with open('data/setu_config.json', 'r', encoding='utf-8') as file:
             setu_dict = json.load(file)
             setu_tag = setu_dict["ban_tags"]
-            await bot.send(message=f"当前被ban的tag：'{setu_tag}'", event=event)
+        await bot.send(message=f"当前被ban的tag：'{setu_tag}'", event=event)
+    else:
+        await msg_forward_name.send("只有主人才有权限哦", at_sender=True)
 
 
 @downLoad.handle()
