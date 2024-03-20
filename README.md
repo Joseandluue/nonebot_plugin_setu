@@ -54,7 +54,7 @@ pip install nonebot_plugin_setu -U
 -->  
 更改为直接去pixiv通过tag搜图返图  
 在pixiv抓包cookie填入`getPic.py`中  
-魔改过，部分命令设置或许无效，尤其是数据库写入返图信息
+魔改过，部分命令设置或许无效，明确的有往数据库写入返图信息，相关代码已被注释
 
 ### 添加配置
 
