@@ -67,19 +67,20 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
             if not tags:
                 data_list = response['body']['thumbnails']['illust']
             else:
-                data_list = response['body']['illust']['data'] + response['body']['popular']['recent']
-        except KeyError:
-            data_list = response['body']['illust']['data']
+                data_list = response['body']['illust']['data']
+            one_picData = random.choice(data_list)
+            one_picData['r18'] = False if r18==0 else True
+            one_picData['ext'] = "jpg"
+            one_picData = [one_picData]
+        except IndexError as e:
+            logger.error(f"没有获取到与tag相关图片{e}")
+            raise e
         except Exception as e:
             logger.error(f"{e}")
             raise e
-        one_picData = random.choice(data_list)
-        one_picData['r18'] = False if r18==0 else True
-        one_picData['ext'] = "jpg"
-        one_picData = [one_picData]
-        logger.debug(one_picData)
         if not one_picData:
             return ""
+        logger.debug(one_picData)
         # ImageDao().add_images(one_picData)
         img = await down_pic(one_picData, online_switch, r18)
         return img
