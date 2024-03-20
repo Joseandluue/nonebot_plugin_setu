@@ -153,7 +153,7 @@ async def _(bot: Bot, event: Event):
             await bot.send(message=f"添加禁tag：{add_tag}成功", event=event, at_sender=True)
         elif msg.startswith("删除ban"):
             del_tag = re.sub(r"^删除ban", '', msg)
-            if await Config.del_ban_args('ban_tags', del_tag):
+            if Config.del_ban_args('ban_tags', del_tag):
                 await bot.send(message=f"删除被禁tag：{del_tag}成功", event=event, at_sender=True)
             else: await bot.send(message=f"{del_tag}不在被ban名单中", event=event, at_sender=True)
     else:
