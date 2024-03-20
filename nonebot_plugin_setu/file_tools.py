@@ -69,6 +69,9 @@ class Config:
     def del_ban_args(args_name: str, args_value: str):
         with open('data/setu_config.json', 'r', encoding='utf-8') as file:
             setu_dict = json.load(file)
+        if args_value in setu_dict[args_name]:
             setu_dict[args_name].remove(args_value)
             with open('data/setu_config.json', 'w', encoding='utf-8') as file_new:
                 json.dump(setu_dict, file_new, indent=4)
+                return True
+        else: return False
