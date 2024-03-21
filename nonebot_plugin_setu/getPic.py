@@ -117,7 +117,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0, ban_tags:lis
                 one_picData = await choice_picData(one_picData)
             if one_picData:
                 one_picData['r18'] = False if r18==0 else True
-                filename, ext = os.path.splitext(one_picData[0]['url'])
+                filename, ext = os.path.splitext(one_picData['url'])
                 ext = ext[1:]
                 one_picData['ext'] = ext
             one_picData = [one_picData]
