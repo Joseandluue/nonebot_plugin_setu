@@ -116,7 +116,7 @@ async def _(bot: Bot, event: Event):
         try:
             if Config().online_switch == 1:
                 img = file_name if tag_flag == 1 else await get_url(online_switch=1, r18=r18, ban_tags=ban_tags)
-                message_list = [MessageSegment.image(img['base64']), f"https://pixiv.net/artworks/{img['pid']}"]
+                message_list = [MessageSegment.image(img['base64']), f"https://pixiv.net/artworks/{img['pid']}", f"tags:{img['tags']}"]
                 msg_info = await send_forward_msg(bot, event, bot_name, bot.self_id, message_list, is_group_chat)
             else:
                 message_list = [MessageSegment.image(f"file:///{img_path.joinpath(file_name)}"),

@@ -1,6 +1,7 @@
 import base64
 import json
 from io import BytesIO
+import os
 
 from httpx import AsyncClient, TimeoutException, HTTPError
 from nonebot.log import logger
@@ -12,7 +13,7 @@ from .file_tools import Config
 from .dao.image_dao import ImageDao
 from .proxies import proxy_http, proxy_socks
 
-cookie = ''
+cookie = Config().cookie
 
 
 async def choice_picData(data):
@@ -116,7 +117,9 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0, ban_tags:lis
                 one_picData = await choice_picData(one_picData)
             if one_picData:
                 one_picData['r18'] = False if r18==0 else True
-                one_picData['ext'] = "jpg"
+                filename, ext = os.path.splitext(one_picData[0]['url'])
+                ext = ext[1:]
+                one_picData['ext'] = ext
             one_picData = [one_picData]
         except Exception as e:
             logger.error(f"{e}")
@@ -146,8 +149,8 @@ async def down_pic(one_picData, online_switch: int, r18: int = 0):
         url = one_picData[0]['url']
         url = proxy_url if Config().proxies_switch else url
         pid = one_picData[0]['id']
-        ext = one_picData[0]['ext']
-        tag_img = str(pid) + "." + ext
+        tag_img = str(pid) + "." + one_picData[0]['ext']
+        tags = one_picData[0]['tags']
         flag = 0
         while True:
             try:
@@ -168,6 +171,7 @@ async def down_pic(one_picData, online_switch: int, r18: int = 0):
         pbar.update(1)
         if online_switch == 1:
             img_info = {'pid': pid,
+                        'tags': tags,
                         'base64': f"base64://{base64.b64encode(BytesIO(response.content).getvalue()).decode()}"}
             return img_info
         img_path = f"loliconImages/{'r18/' if r18 else ''}{pid}.{ext}"

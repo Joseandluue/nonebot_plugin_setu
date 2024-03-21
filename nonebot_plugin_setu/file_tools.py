@@ -5,6 +5,7 @@ import pathlib
 
 setu_config = {
     'SUPERUSERS': [""],
+    'COOKIE': '',
     'PROXIES_HTTP': '',
     'PROXIES_SOCKS': '',
     'PROXIES_SWITCH': 0,
@@ -19,11 +20,12 @@ class Config:
         with open('data/setu_config.json', 'r', encoding='utf-8') as file:
             self.config = json.load(file)
         self.super_users = self.config['SUPERUSERS']
+        self.cookie = self.config['COOKIE']
         self.proxies_http = self.config['PROXIES_HTTP']
         self.proxies_socks = self.config['PROXIES_SOCKS']
         self.proxies_switch = self.config['PROXIES_SWITCH']
         self.online_switch = self.config['ONLINE_SWITCH']
-        self.ban_tags = self.config['ban_tags']
+        self.ban_tags = self.config['ban_tags']   
 
     @staticmethod
     def create_file():
