@@ -61,9 +61,13 @@ class Config:
     def set_ban_args(args_name: str, args_value: str):
         with open('data/setu_config.json', 'r', encoding='utf-8') as file:
             setu_dict = json.load(file)
+        if args_value not in setu_dict[args_name]:
             setu_dict[args_name].append(args_value)
-        with open('data/setu_config.json', 'w', encoding='utf-8') as file_new:
-            json.dump(setu_dict, file_new, indent=4, ensure_ascii=False)
+            with open('data/setu_config.json', 'w', encoding='utf-8') as file_new:
+                json.dump(setu_dict, file_new, indent=4, ensure_ascii=False)
+                return True
+        else:
+            return False
 
     @staticmethod
     def del_ban_args(args_name: str, args_value: str):
@@ -74,4 +78,5 @@ class Config:
             with open('data/setu_config.json', 'w', encoding='utf-8') as file_new:
                 json.dump(setu_dict, file_new, indent=4)
                 return True
-        else: return False
+        else: 
+            return False

@@ -14,7 +14,6 @@ from .proxies import proxy_http, proxy_socks
 
 cookie = ''
 
-ban_tags = Config().ban_tags
 
 async def choice_picData(data):
 
@@ -47,7 +46,7 @@ async def choice_picData(data):
     return data
 
 
-async def isban(data):
+async def isban(data, ban_tags:list = []):
     count = 0
     while count < 3:
         one_picData = data[random.randint(0, len(data) - 1)]
@@ -57,7 +56,7 @@ async def isban(data):
         count += 1
     return None
 
-async def get_url(online_switch: int, tags: str = "", r18: int = 0):
+async def get_url(online_switch: int, tags: str = "", r18: int = 0, ban_tags:list = []):
     safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
     r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
     notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'
@@ -76,7 +75,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
         "upgrade-insecure-requests": "1",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
     }
-    
+
     http = proxy_http if Config().proxies_switch else None
     socks = proxy_socks if Config().proxies_switch else None
     async with AsyncClient(proxies=http, transport=socks) as client:
@@ -88,7 +87,6 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                     raise Exception(f"获取api内容失败次数过多，请检查网络链接")
                 if not tags:
                     res = await client.get(url=notag_url.format(mode = 'all' if r18==0 else 'r18'), headers=headers, timeout=10)
-                    print(notag_url.format(mode = 'all' if r18==0 else 'r18'))
                 else :
                     url = safe_url if r18==0 else r18_url
                     res = await client.get(url=url.format(tag=tags, p=random.choice([1,2])), headers=headers, timeout=10)
@@ -113,7 +111,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0):
                 data_list = response['body']['illust']['data']
             if not data_list:
                 raise Exception("没有获取到与tag相关图片")
-            one_picData = await isban(data_list)
+            one_picData = await isban(data_list, ban_tags)
             if one_picData["pageCount"] > 1 :
                 one_picData = await choice_picData(one_picData)
             if one_picData:

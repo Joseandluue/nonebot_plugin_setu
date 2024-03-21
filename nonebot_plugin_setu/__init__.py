@@ -72,6 +72,7 @@ async def _(bot: Bot, event: Event):
         await setu.finish(message=Message('未开启获取权限'), at_sender=True)
     else:
         bot_name = Config().get_file_args(args_name='FORWARD_NAME')
+        ban_tags = Config().get_file_args("ban_tags")
         is_group_chat = hasattr(event, 'group_id')
         r18 = UserDao().get_r18_private_chat() \
             if not is_group_chat else GroupDao().get_group_r18(event.group_id)
@@ -99,7 +100,7 @@ async def _(bot: Bot, event: Event):
                 if tag in ban_tags:
                     await setu.finish(message=Message(f'阔诺雅鹿`{tag}` 打咩desu'), at_sender=True)
             try:
-                file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18)
+                file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18, ban_tags=ban_tags)
             except httpx.HTTPError:
                 UserDao().delete_user_cd(event.get_user_id())
                 await setu.finish(message=Message('网络错误，请重试'), at_sender=True)
@@ -114,7 +115,7 @@ async def _(bot: Bot, event: Event):
         interval = 0 if not is_group_chat else GroupDao().get_group_interval(event.group_id)
         try:
             if Config().online_switch == 1:
-                img = file_name if tag_flag == 1 else await get_url(online_switch=1, r18=r18)
+                img = file_name if tag_flag == 1 else await get_url(online_switch=1, r18=r18, ban_tags=ban_tags)
                 message_list = [MessageSegment.image(img['base64']), f"https://pixiv.net/artworks/{img['pid']}"]
                 msg_info = await send_forward_msg(bot, event, bot_name, bot.self_id, message_list, is_group_chat)
             else:
@@ -149,13 +150,16 @@ async def _(bot: Bot, event: Event):
         msg = event.get_plaintext()
         if msg.startswith("添加ban"):
             add_tag = re.sub(r"^添加ban", '', msg)
-            Config.set_ban_args('ban_tags', add_tag)
-            await bot.send(message=f"添加禁tag：{add_tag}成功", event=event, at_sender=True)
+            if Config.set_ban_args('ban_tags', add_tag):
+                await bot.send(message=f"添加禁tag：{add_tag}成功", event=event, at_sender=True)
+            else: 
+                await bot.send(message=f"{add_tag}已被ban，无需再次添加", event=event, at_sender=True)
         elif msg.startswith("删除ban"):
             del_tag = re.sub(r"^删除ban", '', msg)
             if Config.del_ban_args('ban_tags', del_tag):
                 await bot.send(message=f"删除被禁tag：{del_tag}成功", event=event, at_sender=True)
-            else: await bot.send(message=f"{del_tag}不在被ban名单中", event=event, at_sender=True)
+            else: 
+                await bot.send(message=f"{del_tag}不在被ban名单中", event=event, at_sender=True)
     else:
         await msg_forward_name.send("只有主人才有权限哦", at_sender=True)
 
