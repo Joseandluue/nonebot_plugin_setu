@@ -2,28 +2,29 @@ import base64
 import json
 from io import BytesIO
 import os
+import random
 
 from httpx import AsyncClient, TimeoutException, HTTPError
 from nonebot.log import logger
 from tqdm import tqdm
 from urllib.parse import unquote
-import random
+
 
 from .file_tools import Config
 from .dao.image_dao import ImageDao
 from .proxies import proxy_http, proxy_socks
 
-cookie = Config().cookie
+config = Config()
 
 
-async def choice_picData(data):
+async def get_ArtPic(data):     #通过作品id获取图片url(regular)/width/height
 
     id = data["id"]
     artword_url = 'https://www.pixiv.net/ajax/illust/{id}/pages?lang=zh'
     
     headers = {
         'referer': 'https://www.pixiv.net/artworks/'+id,
-        'cookie': cookie,
+        'cookie': Config().cookie,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
     }
 
@@ -33,11 +34,10 @@ async def choice_picData(data):
         res = await client.get(url=artword_url.format(id=id), headers=headers, timeout=10)
     response = json.loads(unquote(res.text))
     try:
-        data_urls = response["body"]
-        data_url = data_url = data_urls[random.randint(0,len(data_urls)) - 1]
+        data_url = await config.dict_choice(response["body"])
     except KeyError as e:
         logger.error(f"多图索引错误：{e}")
-        raise Exception(f"多图索引错误")
+        raise Exception("多图索引错误")
     update_data = {
         "url": data_url["urls"]["regular"],
         "width": data_url["width"],
@@ -47,17 +47,7 @@ async def choice_picData(data):
     return data
 
 
-async def isban(data, ban_tags:list = []):
-    count = 0
-    while count < 3:
-        one_picData = data[random.randint(0, len(data) - 1)]
-        tags = one_picData.get("tag", [])
-        if not any(tag in tags for tag in ban_tags):
-            return one_picData
-        count += 1
-    return None
-
-async def get_url(online_switch: int, tags: str = "", r18: int = 0, ban_tags:list = []):
+async def get_url(online_switch: int, tags: str = "", r18: int = 0, rank: int = 0, nums: int = 0):
     safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
     r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
     notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'
@@ -66,7 +56,7 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0, ban_tags:lis
         'referer': 'https://www.pixiv.net/',
         'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,en-GB;q=0.6',
         'Cache-Control':'max-age=0',
-        'cookie': cookie,
+        'cookie': Config().cookie,
         'Sec-Ch-Ua-Mobile': '?0',
         'Sec-Ch-Ua-Platform':'"Windows"',
         'Sec-Fetch-Des': 'document',
@@ -104,23 +94,51 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0, ban_tags:lis
             except Exception as e:
                 logger.error(f"{e}")
                 raise e
+        
         response = json.loads(unquote(res.text))
         try:
             if not tags:
-                data_list = response['body']['thumbnails']['illust']
+                data_list = response['body']['page']['ranking']['items'] if rank == 1 \
+                    else response['body']['page']['recommend']['ids']        
             else:
                 data_list = response['body']['illust']['data']
             if not data_list:
                 raise Exception("没有获取到与tag相关图片")
-            one_picData = await isban(data_list, ban_tags)
-            if one_picData["pageCount"] > 1 :
-                one_picData = await choice_picData(one_picData)
+            if rank ==1:
+                logger.debug(f'nums = {nums}')
+                one_rankpic = await config.dict_choice(data_list) if nums == 0 else data_list[int(nums) - 1] 
+                dict_map = {d['id']: d for d in response['body']['thumbnails']['illust']}
+                one_picData = dict_map.get(one_rankpic['id'])
+                one_picData['url'] = one_picData['urls']["1200x1200"]
+                one_picData['Rank_No'] = one_rankpic['rank']
+                del dict_map,data_list
+            elif not tags and rank == 0 :
+                one_picData = await config.dict_choice(data_list)
+                dict_map = {d['id']: d for d in response['body']['thumbnails']['illust']}
+                one_picData = dict_map.get(one_picData)
+                one_picData['url'] = one_picData['urls']["1200x1200"]
+                del dict_map,data_list
+            else:
+                c = 0
+                while c < 3:
+                    one_picData = await config.dict_choice(data_list)
+                    logger.debug('1')
+                    one_picData = await Config().isban_tag(one_picData)
+                    if one_picData:
+                        break
+                    c += 1
+                if c >= 3:
+                    one_picData = None
+                del data_list
+                    
+                if one_picData["pageCount"] > 1 :
+                    one_picData = await get_ArtPic(one_picData)
             if one_picData:
                 one_picData['r18'] = False if r18==0 else True
                 filename, ext = os.path.splitext(one_picData['url'])
                 ext = ext[1:]
                 one_picData['ext'] = ext
-            one_picData = [one_picData]
+                one_picData = [one_picData]
         except Exception as e:
             logger.error(f"{e}")
             raise e
@@ -156,7 +174,7 @@ async def down_pic(one_picData, online_switch: int, r18: int = 0):
             try:
                 flag += 1
                 if flag > 10:
-                    raise Exception(f"获取图片内容失败次数过多，请检查网络链接")
+                    raise Exception("获取图片内容失败次数过多，请检查网络链接")
                 response = await client.get(url=url, headers=head, timeout=10)
                 if response.status_code == 200:
                     break
@@ -172,9 +190,10 @@ async def down_pic(one_picData, online_switch: int, r18: int = 0):
         if online_switch == 1:
             img_info = {'pid': pid,
                         'tags': tags,
+                        'Rank_No': one_picData[0].get('Rank_No', None),
                         'base64': f"base64://{base64.b64encode(BytesIO(response.content).getvalue()).decode()}"}
             return img_info
-        img_path = f"loliconImages/{'r18/' if r18 else ''}{pid}.{ext}"
+        img_path = f"loliconImages/{'r18/' if r18 else ''}{pid}.{one_picData[0]['ext']}"
         with open(img_path, 'wb') as f:
             f.write(response.content)
     pbar.close()

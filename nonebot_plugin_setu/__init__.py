@@ -21,7 +21,7 @@ from .setu_api import setu_api
 from .utils import send_forward_msg, get_file_num, img_num_detect
 from .withdraw import add_withdraw_job
 
-setu = on_regex("^涩图$|^setu$|^无内鬼$|^色图$|^涩图tag.+$")
+setu = on_regex(r"^涩图$|^setu$|^无内鬼$|^色图$|^涩图tag.+$|^今日社保([1-9]?[0-9]?|100)$")
 downLoad = on_regex(r"^下载涩图[1-9]\d*$|^下载色图[1-9]\d*$")
 user_cd = on_regex(r"^\[CQ:at,qq=[1-9][0-9]{4,10}\] cd\d+$")
 group_cd = on_regex(r"^群cd0$|^群cd[1-9]\d*$")
@@ -34,45 +34,21 @@ setu_help = on_regex(r"^涩图帮助$")
 msg_forward_name = on_regex(r"^涩图转发者名字.+$")
 msg_ban_tag = on_regex(r"^添加ban|^删除ban.+$")
 see_ban_tag = on_regex(r"^查看ban$")
+send_msg = on_regex(r"^开启发图$|^关闭发图$")
 
 super_user = Config().super_users
-ban_tags = Config().ban_tags
 driver = get_driver()
 driver.server_app.mount('/setu', setu_api, name='setu_plugin')
 
 
-def is_blacklisted(group_id):
-    if os.path.exists("data/setu/blacklist.json"):  # 读取用户数据
-        with open("data/setu/blacklist.json", "r", encoding="utf-8") as f:
-            blacklist = json.load(f)
-            blacklisted_groups = blacklist["blacklisted_groups"]
-            if group_id in blacklisted_groups:
-                return True
-        return False
-    else:
-        if not os.path.exists("data/setu"):
-            os.makedirs("data/setu")  # 创建文件夹
-        blacklist = {}
-        with open("data/setu/blacklist.json", "w", encoding="utf-8") as f:
-            json.dump(blacklist, f)
-    return False
-
-async def is_allow(event: Event):
-    if isinstance(event, PrivateMessageEvent):
-        return True
-    elif isinstance(event, GroupMessageEvent):
-        if is_blacklisted(event.group_id):
-            return False
-        else:
-            return True
 
 @setu.handle()
 async def _(bot: Bot, event: Event):
-    if not await is_allow(event):
+    logger.debug(f'event:{event}')
+    if not await Config().is_allow(event):
         await setu.finish(message=Message('未开启获取权限'), at_sender=True)
     else:
         bot_name = Config().get_file_args(args_name='FORWARD_NAME')
-        ban_tags = Config().get_file_args("ban_tags")
         is_group_chat = hasattr(event, 'group_id')
         r18 = UserDao().get_r18_private_chat() \
             if not is_group_chat else GroupDao().get_group_r18(event.group_id)
@@ -91,16 +67,17 @@ async def _(bot: Bot, event: Event):
             await setu.finish(f'要等{hour}小时{minute}分钟才能再要涩图哦', at_sender=True)
         msg = event.get_plaintext()
         tag_flag = 0
+        rank = 0
         if bool(re.search(r"^涩图tag.+$", msg)):
             tag_flag = 1
             msg = msg.replace(" ", "")
             tags = re.sub(r'^涩图tag', '', msg).replace('和', ' ')
             tags_list = tags.split()
             for tag in tags_list:
-                if tag in ban_tags:
+                if tag in Config().ban_tags:
                     await setu.finish(message=Message(f'阔诺雅鹿`{tag}` 打咩desu'), at_sender=True)
             try:
-                file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18, ban_tags=ban_tags)
+                file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18)
             except httpx.HTTPError:
                 UserDao().delete_user_cd(event.get_user_id())
                 await setu.finish(message=Message('网络错误，请重试'), at_sender=True)
@@ -112,11 +89,35 @@ async def _(bot: Bot, event: Event):
             if file_name == "":
                 UserDao().delete_user_cd(event.get_user_id())
                 await setu.finish('没有找到相关涩图，请更换tag', at_sender=True)
+        if bool(re.search(r"^今日社保([1-9]?[0-9]?|100)$" , msg)):
+            rank = 1
+            msg = msg.replace(" ", "")
+            nums = re.sub(r'^今日社保', '', msg)
+            num = int(nums) if nums else 0
+            try:
+                file_name = await get_url(online_switch=Config().online_switch, r18=r18, rank=rank, nums=num)
+            except httpx.HTTPError:
+                UserDao().delete_user_cd(event.get_user_id())
+                await setu.finish(message=Message('网络错误，请重试'), at_sender=True)
+            except Exception as e:
+                UserDao().delete_user_cd(event.get_user_id())
+                await setu.finish(message=Message(f'{e}'), at_sender=True)
+            if Config().online_switch == 0:
+                pid = re.sub(r'\D+', '', file_name)
+            if file_name == "":
+                UserDao().delete_user_cd(event.get_user_id())
+                await setu.finish('没有找到相关涩图，请更换tag', at_sender=True)
+            pass
         interval = 0 if not is_group_chat else GroupDao().get_group_interval(event.group_id)
         try:
             if Config().online_switch == 1:
-                img = file_name if tag_flag == 1 else await get_url(online_switch=1, r18=r18, ban_tags=ban_tags)
-                message_list = [MessageSegment.image(img['base64']), f"https://pixiv.net/artworks/{img['pid']}", f"tags: {img['tags']}"]
+                if rank ==1:
+                    img = file_name
+                    message_list = [f"No.{img['Rank_No']}{MessageSegment.image(img['base64'])}", \
+                                    f"https://pixiv.net/artworks/{img['pid']}", f"tags: {img['tags']}"]
+                else:
+                    img = file_name if tag_flag == 1 else await get_url(online_switch=1, r18=r18)
+                    message_list = [MessageSegment.image(img['base64']), f"https://pixiv.net/artworks/{img['pid']}", f"tags: {img['tags']}"]
                 msg_info = await send_forward_msg(bot, event, bot_name, bot.self_id, message_list, is_group_chat)
             else:
                 message_list = [MessageSegment.image(f"file:///{img_path.joinpath(file_name)}"),
@@ -150,13 +151,13 @@ async def _(bot: Bot, event: Event):
         msg = event.get_plaintext()
         if msg.startswith("添加ban"):
             add_tag = re.sub(r"^添加ban", '', msg)
-            if Config.set_ban_args('ban_tags', add_tag):
+            if Config().set_ban_args('ban_tags', add_tag):
                 await bot.send(message=f"添加禁tag：{add_tag}成功", event=event, at_sender=True)
             else: 
                 await bot.send(message=f"{add_tag}已被ban，无需再次添加", event=event, at_sender=True)
         elif msg.startswith("删除ban"):
             del_tag = re.sub(r"^删除ban", '', msg)
-            if Config.del_ban_args('ban_tags', del_tag):
+            if Config().del_ban_args('ban_tags', del_tag):
                 await bot.send(message=f"删除被禁tag：{del_tag}成功", event=event, at_sender=True)
             else: 
                 await bot.send(message=f"{del_tag}不在被ban名单中", event=event, at_sender=True)
@@ -297,6 +298,20 @@ async def _(event: Event):
             await r18_switch.finish(f"{msg}成功")
     else:
         await r18_switch.finish('只有主人才有权限哦', at_sender=True)
+
+
+@send_msg.handle()
+async def _(bot: Bot, event: Event):
+    msg = event.get_plaintext()
+    if event.get_user_id() in super_user:
+        if msg == "开启发图" or msg == "关闭发图":
+            if not hasattr(event, 'group_id'):
+                await r18_switch.finish('想偷偷卢关？')
+            Config().set_white_list(event.group_id, 'save' if msg == "开启发图" else 'del')
+            await r18_switch.finish(f"群{event.group_id}{msg}成功")
+    else:
+        await msg_forward_name.send("只有主人才有权限哦", at_sender=True)
+
 
 @setu_help.handle()
 async def _():

@@ -2,6 +2,9 @@ import json
 import os
 import sqlite3
 import pathlib
+import random
+
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, PrivateMessageEvent, Event
 
 setu_config = {
     'SUPERUSERS': [""],
@@ -10,7 +13,8 @@ setu_config = {
     'PROXIES_SOCKS': '',
     'PROXIES_SWITCH': 0,
     'ONLINE_SWITCH': 1,
-    'ban_tags':[]
+    'ban_tags':[],
+    'white_list': {'group':[],'users':[]}
 }
 
 
@@ -25,7 +29,8 @@ class Config:
         self.proxies_socks = self.config['PROXIES_SOCKS']
         self.proxies_switch = self.config['PROXIES_SWITCH']
         self.online_switch = self.config['ONLINE_SWITCH']
-        self.ban_tags = self.config['ban_tags']   
+        self.ban_tags = self.config['ban_tags']  
+        self.white_list = self.config['white_list'] 
 
     @staticmethod
     def create_file():
@@ -82,3 +87,43 @@ class Config:
                 return True
         else: 
             return False
+        
+
+    async def isban_tag(self, data: list):      #从传入tag列表中遍历每个元素去匹配ban_tags列表
+        if data is None:
+            return None
+        elif not any(d in self.ban_tags for d in data):
+            return data
+        else: return None
+    
+    @staticmethod
+    async def dict_choice(Data_list: list):         #从列表中选取随机一个字典
+        Data_dict = Data_list[random.randint(0,len(Data_list)) - 1]
+        return Data_dict
+
+    @staticmethod
+    def set_white_list(group_id, action):
+        with open('data/setu_config.json', 'r', encoding='utf-8') as file:
+            white_list = json.load(file)
+        white_group = white_list['white_list']['group']
+        if action == 'save' :
+            white_group.append(group_id)
+            with open('data/setu_config.json', 'w', encoding='utf-8') as file_new:
+                json.dump(white_list, file_new, indent=4)
+                return True
+        elif action == 'del':
+            white_group.remove(group_id)
+            with open('data/setu_config.json', 'w', encoding='utf-8') as file_new:
+                json.dump(white_list, file_new, indent=4)
+                return True
+        
+
+
+    async def is_allow(self, event: Event):
+        if isinstance(event, PrivateMessageEvent):
+            return False
+        elif isinstance(event, GroupMessageEvent):
+            if event.group_id in self.white_list['group']:
+                return True
+            else:
+                return False
