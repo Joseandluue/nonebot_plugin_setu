@@ -16,6 +16,25 @@ from .proxies import proxy_http, proxy_socks
 
 config = Config()
 
+async def is_vip():
+    cookie = Config.get_file_args('COOKIE')
+    vip = 'https://www.pixiv.net/setting_user.php'
+    headers = {
+        'referer': 'https://www.pixiv.net/',
+        'cookie': Config().cookie,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
+    }
+    http = proxy_http if Config().proxies_switch else None
+    socks = proxy_socks if Config().proxies_switch else None
+    async with AsyncClient(proxies=http, transport=socks) as client:
+        res = await client.get(url=vip, headers=headers, timeout=10)
+    if res.status_code == 200:
+        if 'ads_hide_pc' in res.text:
+            return True
+        else:
+            False
+    else:
+        logger.error(f"请求失败，状态码: {res.status_code}")
 
 async def get_ArtPic(data):     #通过作品id获取图片url(regular)/width/height
 
@@ -47,23 +66,14 @@ async def get_ArtPic(data):     #通过作品id获取图片url(regular)/width/he
     return data
 
 
-async def get_url(online_switch: int, tags: str = "", r18: int = 0, rank: int = 0, nums: int = 0):
-    safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=safe&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
-    r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order=date_d&mode=r18&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
-    notag_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'
+async def get_url(online_switch: int, sort: str = 'date_d', tags: str = "", r18: int = 0, rank: int = 0, nums: int = 0):
+    safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order={sort}&mode=safe&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
+    r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order={sort}&mode=r18&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
+    notag_url = 'https://www.pixiv.net/ajax/discovery/artworks?mode={mode}&limit=60&lang=zh'
 
     headers = {
-        'referer': 'https://www.pixiv.net/',
-        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,en-GB;q=0.6',
-        'Cache-Control':'max-age=0',
+        'referer': 'https://www.pixiv.net/premium',
         'cookie': Config().cookie,
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform':'"Windows"',
-        'Sec-Fetch-Des': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        "sec-fetch-user": "?1",
-        "upgrade-insecure-requests": "1",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
     }
 
@@ -77,12 +87,12 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0, rank: int = 
                 if flag > 10:
                     raise Exception(f"获取api内容失败次数过多，请检查网络链接")
                 if not tags:
-                    res = await client.get(url=notag_url.format(mode = 'all' if r18==0 else 'r18'), headers=headers, timeout=10)
+                    res = await client.get(url=notag_url.format(mode = 'safe' if r18==0 else 'r18'), headers=headers, timeout=10)
                 else :
                     url = safe_url if r18==0 else r18_url
-                    res = await client.get(url=url.format(tag=tags, p=random.choice([1,2])), headers=headers, timeout=10)
+                    res = await client.get(url=url.format(tag=tags, sort=sort, p=random.choice([1,2])), headers=headers, timeout=10)
                     if not json.loads(unquote(res.text))['body']['illust']['data']:
-                        res = await client.get(url=url.format(tag=tags, p=1), headers=headers, timeout=10)
+                        res = await client.get(url=url.format(tag=tags, sort=sort, p=1), headers=headers, timeout=10)
                 logger.debug(res)
                 if res.status_code == 200:
                     break
@@ -99,31 +109,41 @@ async def get_url(online_switch: int, tags: str = "", r18: int = 0, rank: int = 
         try:
             if not tags:
                 data_list = response['body']['page']['ranking']['items'] if rank == 1 \
-                    else response['body']['page']['recommend']['ids']        
+                    else response['body']['recommendedIllusts']
             else:
                 data_list = response['body']['illust']['data']
             if not data_list:
                 raise Exception("没有获取到与tag相关图片")
-            if rank ==1:
+            if rank ==1:            #每日排行榜
                 logger.debug(f'nums = {nums}')
-                one_rankpic = await config.dict_choice(data_list) if nums == 0 else data_list[int(nums) - 1] 
+                one_rankpic = await Config.dict_choice(data_list) if nums == 0 else data_list[int(nums) - 1] 
                 dict_map = {d['id']: d for d in response['body']['thumbnails']['illust']}
                 one_picData = dict_map.get(one_rankpic['id'])
                 one_picData['url'] = one_picData['urls']["1200x1200"]
                 one_picData['Rank_No'] = one_rankpic['rank']
                 del dict_map,data_list
-            elif not tags and rank == 0 :
-                one_picData = await config.dict_choice(data_list)
-                dict_map = {d['id']: d for d in response['body']['thumbnails']['illust']}
-                one_picData = dict_map.get(one_picData)
-                one_picData['url'] = one_picData['urls']["1200x1200"]
-                del dict_map,data_list
-            else:
+            elif not tags and rank == 0 :       #涩图不带tag的
                 c = 0
                 while c < 3:
-                    one_picData = await config.dict_choice(data_list)
-                    logger.debug('1')
+                    one_picData = await Config.dict_choice(data_list)
+                    dict_map = {d['id']: d for d in response['body']['thumbnails']['illust']}
+                    one_picData = dict_map.get(one_picData['illustId'])
                     one_picData = await Config().isban_tag(one_picData)
+                    if one_picData:
+                        break
+                    c += 1
+                if c >= 3:
+                    one_picData = None
+                one_picData['url'] = one_picData['urls']["1200x1200"]
+                del dict_map,data_list
+            else:                       #涩图带tag
+                c = 0
+                while c < 3:
+                    logger.debug('1')
+                    one_picData = await Config.dict_choice(data_list)
+                    logger.debug('2')
+                    one_picData = await Config().isban_tag(one_picData)
+                    logger.debug('3')
                     if one_picData:
                         break
                     c += 1

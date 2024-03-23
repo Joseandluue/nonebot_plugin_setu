@@ -7,21 +7,23 @@ from pathlib import Path
 
 import httpx
 from nonebot import get_driver
-from nonebot.adapters.onebot.v11 import Bot, Message, Event, MessageSegment, GroupMessageEvent, PrivateMessageEvent
+from nonebot.adapters.onebot.v11 import Bot, Message, Event, MessageSegment
+from nonebot.internal.params import ArgStr
 from nonebot.exception import NoneBotException
 from nonebot.log import logger
 from nonebot.plugin import on_regex
+from nonebot.params import T_State
 
 from .file_tools import Config
 from .dao.group_dao import GroupDao
 from .dao.image_dao import ImageDao
 from .dao.user_dao import UserDao
-from .getPic import get_url, down_pic
+from .getPic import get_url, is_vip
 from .setu_api import setu_api
 from .utils import send_forward_msg, get_file_num, img_num_detect
 from .withdraw import add_withdraw_job
 
-setu = on_regex(r"^涩图$|^setu$|^无内鬼$|^色图$|^涩图tag.+$|^今日社保([1-9]?[0-9]?|100)$")
+setu = on_regex(r"^涩图$|^setu$|^无内鬼$|^色图$|^涩图tag.+$|^涩榜([1-9]?[0-9]?|100)$")
 downLoad = on_regex(r"^下载涩图[1-9]\d*$|^下载色图[1-9]\d*$")
 user_cd = on_regex(r"^\[CQ:at,qq=[1-9][0-9]{4,10}\] cd\d+$")
 group_cd = on_regex(r"^群cd0$|^群cd[1-9]\d*$")
@@ -34,7 +36,8 @@ setu_help = on_regex(r"^涩图帮助$")
 msg_forward_name = on_regex(r"^涩图转发者名字.+$")
 msg_ban_tag = on_regex(r"^添加ban|^删除ban.+$")
 see_ban_tag = on_regex(r"^查看ban$")
-send_msg = on_regex(r"^开启发图$|^关闭发图$")
+send_msg = on_regex(r"^开图$|^关图$")
+set_sort = on_regex(r"^涩图排序$")
 
 super_user = Config().super_users
 driver = get_driver()
@@ -45,7 +48,7 @@ driver.server_app.mount('/setu', setu_api, name='setu_plugin')
 @setu.handle()
 async def _(bot: Bot, event: Event):
     logger.debug(f'event:{event}')
-    if not await Config().is_allow(event):
+    if not Config().is_allow(event):
         await setu.finish(message=Message('未开启获取权限'), at_sender=True)
     else:
         bot_name = Config().get_file_args(args_name='FORWARD_NAME')
@@ -77,7 +80,8 @@ async def _(bot: Bot, event: Event):
                 if tag in Config().ban_tags:
                     await setu.finish(message=Message(f'阔诺雅鹿`{tag}` 打咩desu'), at_sender=True)
             try:
-                file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18)
+                sort = Config.get_file_args('SORT')
+                file_name = await get_url(tags=tags, online_switch=Config().online_switch, r18=r18, sort=sort)
             except httpx.HTTPError:
                 UserDao().delete_user_cd(event.get_user_id())
                 await setu.finish(message=Message('网络错误，请重试'), at_sender=True)
@@ -89,10 +93,10 @@ async def _(bot: Bot, event: Event):
             if file_name == "":
                 UserDao().delete_user_cd(event.get_user_id())
                 await setu.finish('没有找到相关涩图，请更换tag', at_sender=True)
-        if bool(re.search(r"^今日社保([1-9]?[0-9]?|100)$" , msg)):
+        if bool(re.search(r"^涩榜([1-9]?[0-9]?|100)$" , msg)):
             rank = 1
             msg = msg.replace(" ", "")
-            nums = re.sub(r'^今日社保', '', msg)
+            nums = re.sub(r'^涩榜', '', msg)
             num = int(nums) if nums else 0
             try:
                 file_name = await get_url(online_switch=Config().online_switch, r18=r18, rank=rank, nums=num)
@@ -162,7 +166,7 @@ async def _(bot: Bot, event: Event):
             else: 
                 await bot.send(message=f"{del_tag}不在被ban名单中", event=event, at_sender=True)
     else:
-        await msg_forward_name.send("只有主人才有权限哦", at_sender=True)
+        await msg_ban_tag.send("只有主人才有权限哦", at_sender=True)
 
 @see_ban_tag.handle()
 async def _(bot: Bot, event: Event):
@@ -172,7 +176,7 @@ async def _(bot: Bot, event: Event):
             setu_tag = setu_dict["ban_tags"]
         await bot.send(message=f"当前被ban的tag：{setu_tag}", event=event)
     else:
-        await msg_forward_name.send("只有主人才有权限哦", at_sender=True)
+        await see_ban_tag.send("只有主人才有权限哦", at_sender=True)
 
 
 @downLoad.handle()
@@ -304,14 +308,60 @@ async def _(event: Event):
 async def _(bot: Bot, event: Event):
     msg = event.get_plaintext()
     if event.get_user_id() in super_user:
-        if msg == "开启发图" or msg == "关闭发图":
+        if msg == "开图" or msg == "关图":
             if not hasattr(event, 'group_id'):
                 await r18_switch.finish('想偷偷卢关？')
-            Config().set_white_list(event.group_id, 'save' if msg == "开启发图" else 'del')
+            Config().set_white_list(event.group_id, 'save' if msg == "开图" else 'del')
             await r18_switch.finish(f"群{event.group_id}{msg}成功")
     else:
-        await msg_forward_name.send("只有主人才有权限哦", at_sender=True)
+        await send_msg.send("只有主人才有权限哦", at_sender=True)
 
+
+@set_sort.handle()
+async def _(bot: Bot, event: Event):
+    if event.get_user_id() in super_user:
+        sort = Config.get_file_args('SORT')
+        if sort == 'date_d':
+            sort_cn = '按最新'
+        elif sort == 'date':
+            sort_cn = '按旧'
+        elif sort == 'popular_d':
+            sort_cn = '按热度(全站)'
+        else :
+            sort_cn = '按最新'
+        await set_sort.send(
+            f'选择插画排序方式（输入序号）\n' \
+            f'当前排序:{sort_cn}\n' \
+                '1、按最新排序\n' \
+                '2、按旧排序\n' \
+                '3、按热度(全站)排序(必需pixiv会员)\n' \
+                '❗非会员使用热度排序仍为"按最新排序"'
+                '发送“退出”即可退出')
+    else:
+        await user_cd.send('只有主人才有权限哦', at_sender=True)
+
+
+@set_sort.got('choice')
+async def _(bot: Bot, event: Event, choice=ArgStr()):
+    if event.get_user_id() in super_user:
+        if choice == '退出':
+            await set_sort.finish("已成功退出")
+        elif choice == '1':
+            Config.set_file_args('SORT','date_d')
+            await set_sort.finish("✔️成功设置'按最新排序'")
+        elif choice == '2':
+            Config.set_file_args('SORT','date')
+            await set_sort.finish("✔️成功设置'按旧排序'")
+        elif choice == '3':
+            if await is_vip():
+                Config.set_file_args('SORT','popular_d')
+                await set_sort.finish("✔️成功设置'按热度排序'")
+            else:
+                await set_sort.finish("设置失败：检测到你的'cookie'是非会员账号")
+        else:
+            await set_sort.reject("👎您的输入有误，请重新输入")
+    else:
+        await user_cd.send('只有主人才有权限哦', at_sender=True)
 
 @setu_help.handle()
 async def _():
@@ -330,9 +380,13 @@ async def _():
                 '8、获取api地址：涩图api\n' \
                 '9、开启/关闭涩涩：开启/关闭涩涩，开启/关闭私聊涩涩。用于指定是否开启r18\n' \
                 '10、修改涩图转发者名字：涩图转发者名字+你要修改的名字，例如：涩图转发者名字bot\n' \
+                '11、添加/删除ban：添加/删除需要屏蔽的tag，例如添加ban漫画\n' \
+                '12、查看ban：查看被ban的tag清单\n' \
+                '13、涩图排序：按需求在需求阶段进行图片排序\n' \
                 '全员可用功能:\n' \
-                '1、发送涩图：涩图、setu、无内鬼、色图' \
-                '2、指定tag：涩图tagA(和B和C)，最多指定三个tag'
+                '1、发送涩图：涩图、setu、无内鬼、色图\n' \
+                '2、指定tag：涩图tagA(和B和C)，最多指定两个个tag\n' \
+                '3、涩榜(排名数字)：每日排行榜，例如：涩榜、涩榜1'
         await setu_help.send(_help, at_sender=True)
     except Exception as e:
         logger.error(e)

@@ -14,6 +14,7 @@ setu_config = {
     'PROXIES_SWITCH': 0,
     'ONLINE_SWITCH': 1,
     'ban_tags':[],
+    'SORT': 'date_d',
     'white_list': {'group':[],'users':[]}
 }
 
@@ -31,6 +32,7 @@ class Config:
         self.online_switch = self.config['ONLINE_SWITCH']
         self.ban_tags = self.config['ban_tags']  
         self.white_list = self.config['white_list'] 
+        self.sort = self.config['SORT']
 
     @staticmethod
     def create_file():
@@ -87,7 +89,6 @@ class Config:
                 return True
         else: 
             return False
-        
 
     async def isban_tag(self, data: list):      #从传入tag列表中遍历每个元素去匹配ban_tags列表
         if data is None:
@@ -95,7 +96,7 @@ class Config:
         elif not any(d in self.ban_tags for d in data):
             return data
         else: return None
-    
+
     @staticmethod
     async def dict_choice(Data_list: list):         #从列表中选取随机一个字典
         Data_dict = Data_list[random.randint(0,len(Data_list)) - 1]
@@ -116,10 +117,8 @@ class Config:
             with open('data/setu_config.json', 'w', encoding='utf-8') as file_new:
                 json.dump(white_list, file_new, indent=4)
                 return True
-        
 
-
-    async def is_allow(self, event: Event):
+    def is_allow(self, event: Event):
         if isinstance(event, PrivateMessageEvent):
             return False
         elif isinstance(event, GroupMessageEvent):
