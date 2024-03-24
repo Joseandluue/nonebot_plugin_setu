@@ -14,6 +14,7 @@ setu_config = {
     'PROXIES_SWITCH': 0,
     'ONLINE_SWITCH': 1,
     'ban_tags':[],
+    'ISVIP':0,
     'SORT': 'date_d',
     'white_list': {'group':[],'users':[]}
 }
@@ -32,6 +33,7 @@ class Config:
         self.online_switch = self.config['ONLINE_SWITCH']
         self.ban_tags = self.config['ban_tags']  
         self.white_list = self.config['white_list'] 
+        self.isvip = self.config['ISVIP']
         self.sort = self.config['SORT']
 
     @staticmethod

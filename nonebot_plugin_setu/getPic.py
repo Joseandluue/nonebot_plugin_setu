@@ -14,71 +14,64 @@ from .file_tools import Config
 from .dao.image_dao import ImageDao
 from .proxies import proxy_http, proxy_socks
 
-config = Config()
+
+headers = {
+        'referer': 'https://www.pixiv.net/',
+        'cookie': Config.get_file_args('COOKIE'),
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
+    }
+
+http = proxy_http if Config().proxies_switch else None
+socks = proxy_socks if Config().proxies_switch else None
+
 
 async def is_vip():
-    cookie = Config.get_file_args('COOKIE')
-    vip = 'https://www.pixiv.net/setting_user.php'
-    headers = {
-        'referer': 'https://www.pixiv.net/',
-        'cookie': Config().cookie,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
-    }
-    http = proxy_http if Config().proxies_switch else None
-    socks = proxy_socks if Config().proxies_switch else None
-    async with AsyncClient(proxies=http, transport=socks) as client:
-        res = await client.get(url=vip, headers=headers, timeout=10)
-    if res.status_code == 200:
-        if 'ads_hide_pc' in res.text:
-            return True
-        else:
-            False
-    else:
-        logger.error(f"请求失败，状态码: {res.status_code}")
+    vip_url = 'https://www.pixiv.net/setting_user.php'
+    try:
+        async with AsyncClient(proxies=http, transport=socks) as client:
+            res = await client.get(url=vip_url, headers=headers, timeout=10)
+            if res.status_code == 200:
+                if 'ads_hide_pc' in res.text:
+                    logger.info(f'用户是 VIP 账号')
+                    return True
+                else:
+                    logger.info(f'用户是普通账号')
+                    return False
+            else:
+                logger.error(f"请求失败，状态码: {res.status_code}")
+                return False
+    except TimeoutException as e:
+        logger.error(f"请求超时: {e}")
+        return False
+    except HTTPError as e:
+        logger.error(f"HTTP 错误: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"发生异常: {e}")
+        return False
+
 
 async def get_ArtPic(data):     #通过作品id获取图片url(regular)/width/height
-
     id = data["id"]
     artword_url = 'https://www.pixiv.net/ajax/illust/{id}/pages?lang=zh'
-    
-    headers = {
-        'referer': 'https://www.pixiv.net/artworks/'+id,
-        'cookie': Config().cookie,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
-    }
-
-    http = proxy_http if Config().proxies_switch else None
-    socks = proxy_socks if Config().proxies_switch else None
     async with AsyncClient(proxies=http, transport=socks) as client:
         res = await client.get(url=artword_url.format(id=id), headers=headers, timeout=10)
     response = json.loads(unquote(res.text))
     try:
-        data_url = await config.dict_choice(response["body"])
+        data_list = response["body"]
+        url = [urls["urls"]["regular"] for urls in data_list]
     except KeyError as e:
         logger.error(f"多图索引错误：{e}")
         raise Exception("多图索引错误")
     update_data = {
-        "url": data_url["urls"]["regular"],
-        "width": data_url["width"],
-        "height": data_url["height"]
+        "url": url
     }
     data.update(update_data)
     return data
 
 
-async def get_url(online_switch: int, sort: str = 'date_d', tags: str = "", r18: int = 0, rank: int = 0, nums: int = 0):
-    safe_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order={sort}&mode=safe&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
-    r18_url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order={sort}&mode=r18&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
-    notag_url = 'https://www.pixiv.net/ajax/discovery/artworks?mode={mode}&limit=60&lang=zh'
-
-    headers = {
-        'referer': 'https://www.pixiv.net/premium',
-        'cookie': Config().cookie,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
-    }
-
-    http = proxy_http if Config().proxies_switch else None
-    socks = proxy_socks if Config().proxies_switch else None
+async def get_rankpic_url(r18: int ,nums):
+    rankpic_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'
     async with AsyncClient(proxies=http, transport=socks) as client:
         flag = 0
         while True:
@@ -86,13 +79,7 @@ async def get_url(online_switch: int, sort: str = 'date_d', tags: str = "", r18:
                 flag += 1
                 if flag > 10:
                     raise Exception(f"获取api内容失败次数过多，请检查网络链接")
-                if not tags:
-                    res = await client.get(url=notag_url.format(mode = 'safe' if r18==0 else 'r18'), headers=headers, timeout=10)
-                else :
-                    url = safe_url if r18==0 else r18_url
-                    res = await client.get(url=url.format(tag=tags, sort=sort, p=random.choice([1,2])), headers=headers, timeout=10)
-                    if not json.loads(unquote(res.text))['body']['illust']['data']:
-                        res = await client.get(url=url.format(tag=tags, sort=sort, p=1), headers=headers, timeout=10)
+                res = await client.get(url=rankpic_url.format(mode = 'all' if r18==0 else 'r18'), headers=headers, timeout=10)
                 logger.debug(res)
                 if res.status_code == 200:
                     break
@@ -104,73 +91,135 @@ async def get_url(online_switch: int, sort: str = 'date_d', tags: str = "", r18:
             except Exception as e:
                 logger.error(f"{e}")
                 raise e
-        
         response = json.loads(unquote(res.text))
-        try:
-            if not tags:
-                data_list = response['body']['page']['ranking']['items'] if rank == 1 \
-                    else response['body']['recommendedIllusts']
-            else:
-                data_list = response['body']['illust']['data']
-            if not data_list:
-                raise Exception("没有获取到与tag相关图片")
-            if rank ==1:            #每日排行榜
-                logger.debug(f'nums = {nums}')
-                one_rankpic = await Config.dict_choice(data_list) if nums == 0 else data_list[int(nums) - 1] 
-                dict_map = {d['id']: d for d in response['body']['thumbnails']['illust']}
-                one_picData = dict_map.get(one_rankpic['id'])
-                one_picData['url'] = one_picData['urls']["1200x1200"]
-                one_picData['Rank_No'] = one_rankpic['rank']
-                del dict_map,data_list
-            elif not tags and rank == 0 :       #涩图不带tag的
-                c = 0
-                while c < 3:
-                    one_picData = await Config.dict_choice(data_list)
-                    dict_map = {d['id']: d for d in response['body']['thumbnails']['illust']}
-                    one_picData = dict_map.get(one_picData['illustId'])
-                    one_picData = await Config().isban_tag(one_picData)
-                    if one_picData:
-                        break
-                    c += 1
-                if c >= 3:
-                    one_picData = None
-                one_picData['url'] = one_picData['urls']["1200x1200"]
-                del dict_map,data_list
-            else:                       #涩图带tag
-                c = 0
-                while c < 3:
-                    logger.debug('1')
-                    one_picData = await Config.dict_choice(data_list)
-                    logger.debug('2')
-                    one_picData = await Config().isban_tag(one_picData)
-                    logger.debug('3')
-                    if one_picData:
-                        break
-                    c += 1
-                if c >= 3:
-                    one_picData = None
-                del data_list
-                    
-                if one_picData["pageCount"] > 1 :
-                    one_picData = await get_ArtPic(one_picData)
+        rankpic_list = response['body']['page']['ranking']['items']
+        one_rankpicId = await Config.dict_choice(rankpic_list) if nums == 0 else rankpic_list[int(nums) - 1] 
+        illusts_list = {d['id']: d for d in response['body']['thumbnails']['illust']}
+        one_picData = illusts_list.get(one_rankpicId['id'])
+        one_picData['url'] = one_picData['urls']["1200x1200"]
+        one_picData['Rank_No'] = one_rankpicId['rank']
+        return one_picData
+
+async def get_notagPic_url(r18: int ):
+    notag_url = 'https://www.pixiv.net/ajax/discovery/artworks?mode={mode}&limit=60&lang=zh'    #发现页面
+    notag_vip_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'                    #首页
+    
+    vip = 1 if await is_vip() else 0
+
+    async with AsyncClient(proxies=http, transport=socks) as client:
+        flag = 0
+        while True:
+            try:
+                flag += 1
+                if flag > 10:
+                    raise Exception(f"获取api内容失败次数过多，请检查网络链接")
+                if vip == 0:
+                    res = await client.get(url=notag_url.format(mode = 'safe' if r18==0 else 'r18'), headers=headers, timeout=10)
+                elif vip == 1:
+                    if r18 == 0:
+                        res = await client.get(url=notag_vip_url.format(mode = 'all'), headers=headers, timeout=10)
+                    elif r18 == 1:
+                        res = await client.get(url=notag_vip_url.format(mode = 'r18'), headers=headers, timeout=10)
+                logger.debug(res)
+                if res.status_code == 200:
+                    logger.debug(res.status_code)
+                    break
+            except TimeoutException as e:
+                logger.error(f"获取pixiv内容超时{type(e)}")
+            except HTTPError as e:
+                logger.error(f"{type(e)}")
+                raise e
+            except Exception as e:
+                logger.error(f"{e}")
+                raise e
+        response = json.loads(unquote(res.text))
+        
+        if vip == 0:
+            id_list = response['body']['recommendedIllusts']
+            one_picid = await Config.dict_choice(id_list)
+            illusts_list = {d['id']: d for d in response['body']['thumbnails']['illust']}
+            one_picData = illusts_list.get(one_picid['illustId'])   
+        elif vip == 1:
+            if r18 == 0:
+                id_list = response['body']['page']['recommend']['ids']
+                one_picid = await Config.dict_choice(id_list)
+                illusts_list = {d['id']: d for d in response['body']['thumbnails']['illust']}
+                one_picData = illusts_list.get(one_picid)
+            elif r18 == 1:
+                illusts_list = response['body']['thumbnails']['illust']
+                one_picData = await Config.dict_choice(illusts_list)
+        one_picData['url'] = one_picData['urls']["1200x1200"]
+        logger.debug('2')
+        return one_picData
+
+
+async def get_tagPic_url(tags,sort,r18):
+    url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order={sort}&mode={mode}&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
+    async with AsyncClient(proxies=http, transport=socks) as client:
+        flag = 0
+        while True:
+            try:
+                flag += 1
+                if flag > 10:
+                    raise Exception(f"获取api内容失败次数过多，请检查网络链接")
+                res = await client.get(url=url.format(tag=tags, sort=sort, mode='safe' if r18==0 else 'r18', p=random.choice([1,2])), headers=headers, timeout=10)
+                if not json.loads(unquote(res.text))['body']['illust']['data']:
+                    res = await client.get(url=url.format(tag=tags, sort=sort, mode='safe' if r18==0 else 'r18', p=1), headers=headers, timeout=10)
+                logger.debug(res)
+                if res.status_code == 200:
+                    break
+            except TimeoutException as e:
+                logger.error(f"获取pixiv内容超时{type(e)}")
+            except HTTPError as e:
+                logger.error(f"{type(e)}")
+                raise e
+            except Exception as e:
+                logger.error(f"{e}")
+                raise e
+        response = json.loads(unquote(res.text))
+        data_list = response['body']['illust']['data']
+        c = 0
+        while c < 10:
+            one_picData = await Config.dict_choice(data_list)
+            one_picData = await Config().isban_tag(one_picData)
             if one_picData:
-                one_picData['r18'] = False if r18==0 else True
-                filename, ext = os.path.splitext(one_picData['url'])
-                ext = ext[1:]
-                one_picData['ext'] = ext
-                one_picData = [one_picData]
-        except Exception as e:
-            logger.error(f"{e}")
-            raise e
-        if not one_picData:
-            return ""
-        logger.debug(one_picData)
-        # ImageDao().add_images(one_picData)
-        img = await down_pic(one_picData, online_switch, r18)
-        return img
+                break
+            c += 1
+        if c >= 10:
+            one_picData = None
+        del data_list
+        return one_picData
+
+
+async def get_url(online_switch: int, sort: str = 'date_d', tags: str = "", r18: int = 0, rank: int = 0, nums: int = 0):
+    try:
+        if rank == 1:
+            one_picData = await get_rankpic_url(r18,nums)
+        elif not tags:
+            one_picData = await get_notagPic_url(r18)
+        elif tags:
+            one_picData = await get_tagPic_url(tags,sort,r18)
+        if one_picData["pageCount"] > 1 :
+            one_picData = await get_ArtPic(one_picData)
+        if one_picData:
+            one_picData['r18'] = False if r18==0 else True
+            filename, ext = os.path.splitext(one_picData['url'] if isinstance(one_picData['url'],str) else one_picData['url'][0])
+            ext = ext[1:]
+            one_picData['ext'] = ext
+            one_picData = [one_picData]
+    except Exception as e:
+        logger.error(f"{e}")
+        raise e
+    if not one_picData:
+        return ""
+    # ImageDao().add_images(one_picData)
+    logger.debug(one_picData)
+    img = await down_pic(one_picData, online_switch, r18)
+    return img
 
 
 async def down_pic(one_picData, online_switch: int, r18: int = 0):
+    logger.debug('0')
     head = {
         'referer': 'https://www.pixiv.net/',
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
@@ -180,41 +229,52 @@ async def down_pic(one_picData, online_switch: int, r18: int = 0):
     async with AsyncClient(proxies=http, transport=socks) as client:
         pbar = tqdm(one_picData, desc='Downloading', colour='green')
         tag_img = ""
-        splicing_url = "https://i.pixiv.re/img-master/" + one_picData[0]["url"][one_picData[0]["url"].find("/img/"):]
-        if "square" in splicing_url:
-            splicing_url = splicing_url.replace("square", "master")
-        proxy_url = splicing_url
-        url = one_picData[0]['url']
-        url = proxy_url if Config().proxies_switch else url
+        if isinstance(one_picData[0]['url'], str):
+            one_picData[0]['url'] = [one_picData[0]['url']]
         pid = one_picData[0]['id']
         tag_img = str(pid) + "." + one_picData[0]['ext']
         tags = one_picData[0]['tags']
         flag = 0
-        while True:
-            try:
-                flag += 1
-                if flag > 10:
-                    raise Exception("获取图片内容失败次数过多，请检查网络链接")
-                response = await client.get(url=url, headers=head, timeout=10)
-                if response.status_code == 200:
-                    break
-            except TimeoutException as e:
-                logger.error(f"获取图片内容超时: {type(e)}")
-            except HTTPError as e:
-                logger.error(f"{type(e)}")
-                raise e
-            except Exception as e:
-                logger.error(f"{e}")
-                raise e
+        down_pic_list = []
+        pic_saveData = []
+        for one_url in one_picData[0]['url']:
+            splicing_url = "https://i.pixiv.re/img-master" + one_url[one_url.find("/img/"):]
+            proxy_url = splicing_url
+            if "square" in splicing_url:
+                splicing_url = splicing_url.replace("square", "master")
+            url = proxy_url if Config().proxies_switch else one_url
+            while True:
+                try:
+                    flag += 1
+                    if flag > 10:
+                        raise Exception("获取图片内容失败次数过多，请检查网络链接")
+                    response = await client.get(url=url, headers=head, timeout=10)
+                    if response.status_code == 200:
+                        if online_switch == 1:
+                            down_pic_list.append(f"base64://{base64.b64encode(BytesIO(response.content).getvalue()).decode()}")
+                        else:
+                            pic_saveData.append(response.content)
+                        break
+                except TimeoutException as e:
+                    logger.error(f"获取图片内容超时: {type(e)}")
+                except HTTPError as e:
+                    logger.error(f"{type(e)}")
+                    raise e
+                except Exception as e:
+                    logger.error(f"{e}")
+                    raise e
         pbar.update(1)
         if online_switch == 1:
             img_info = {'pid': pid,
                         'tags': tags,
                         'Rank_No': one_picData[0].get('Rank_No', None),
-                        'base64': f"base64://{base64.b64encode(BytesIO(response.content).getvalue()).decode()}"}
+                        'base64': down_pic_list}
             return img_info
-        img_path = f"loliconImages/{'r18/' if r18 else ''}{pid}.{one_picData[0]['ext']}"
-        with open(img_path, 'wb') as f:
-            f.write(response.content)
+        count = 0
+        for response in pic_saveData:
+            count += 1
+            img_path = f"loliconImages/{'r18/' if r18 else ''}{pid}_{count}.{one_picData[0]['ext']}"
+            with open(img_path, 'wb') as f:
+                f.write(response)
     pbar.close()
     return tag_img
