@@ -40,10 +40,17 @@ send_msg = on_regex(r"^开图$|^关图$")
 set_sort = on_regex(r"^涩图排序$")
 
 super_user = Config().super_users
+
 driver = get_driver()
 driver.server_app.mount('/setu', setu_api, name='setu_plugin')
 
-
+##插件启动时检查cookie会员情况，并写入状态
+def vip():
+    if is_vip():
+        Config.set_file_args('ISVIP',1)
+    else:
+        Config.set_file_args('ISVIP',0)
+check_cookie_vip = vip()
 
 @setu.handle()
 async def _(bot: Bot, event: Event):

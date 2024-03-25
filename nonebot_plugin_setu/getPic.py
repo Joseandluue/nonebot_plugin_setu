@@ -104,7 +104,7 @@ async def get_notagPic_url(r18: int ):
     notag_url = 'https://www.pixiv.net/ajax/discovery/artworks?mode={mode}&limit=60&lang=zh'    #发现页面
     notag_vip_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'                    #首页
     
-    vip = 1 if await is_vip() else 0
+    vip = Config.get_file_args('ISVIP')
 
     async with AsyncClient(proxies=http, transport=socks) as client:
         flag = 0
@@ -115,14 +115,16 @@ async def get_notagPic_url(r18: int ):
                     raise Exception(f"获取api内容失败次数过多，请检查网络链接")
                 if vip == 0:
                     res = await client.get(url=notag_url.format(mode = 'safe' if r18==0 else 'r18'), headers=headers, timeout=10)
+                    logger.info(f"返图url:{notag_url.format(mode = 'safe' if r18==0 else 'r18')}")
                 elif vip == 1:
                     if r18 == 0:
                         res = await client.get(url=notag_vip_url.format(mode = 'all'), headers=headers, timeout=10)
+                        logger.info(f"返图url:{notag_vip_url.format(mode = 'all')}")
                     elif r18 == 1:
                         res = await client.get(url=notag_vip_url.format(mode = 'r18'), headers=headers, timeout=10)
+                        logger.info(f"返图url:{notag_vip_url.format(mode = 'r18')}")
                 logger.debug(res)
                 if res.status_code == 200:
-                    logger.debug(res.status_code)
                     break
             except TimeoutException as e:
                 logger.error(f"获取pixiv内容超时{type(e)}")
@@ -136,20 +138,21 @@ async def get_notagPic_url(r18: int ):
         
         if vip == 0:
             id_list = response['body']['recommendedIllusts']
-            one_picid = await Config.dict_choice(id_list)
+            one_picid = await Config.dict_choice(id_list) if id_list else logger.debug('普通账号返图清单失败')
             illusts_list = {d['id']: d for d in response['body']['thumbnails']['illust']}
             one_picData = illusts_list.get(one_picid['illustId'])   
         elif vip == 1:
             if r18 == 0:
-                id_list = response['body']['page']['recommend']['ids']
-                one_picid = await Config.dict_choice(id_list)
-                illusts_list = {d['id']: d for d in response['body']['thumbnails']['illust']}
-                one_picData = illusts_list.get(one_picid)
+                ## id_list = response['body']['thumbnails']['illust']     ## 暂时废弃，这个太看p站给你的推荐作品了，号没养好不建议用response['body']['page']['recommend']['ids']
+                ## one_picid = await Config.dict_choice(id_list) if id_list else logger.debug('会员账号返图非R18清单失败')
+                ## illusts_list = {d['id']: d for d in response['body']['thumbnails']['illust']}
+                ## one_picData = illusts_list.get(one_picid)
+                illusts_list = response['body']['thumbnails']['illust']
+                one_picData = await Config.dict_choice(illusts_list) if illusts_list else logger.debug('会员账号返图非R18清单失败')
             elif r18 == 1:
                 illusts_list = response['body']['thumbnails']['illust']
-                one_picData = await Config.dict_choice(illusts_list)
+                one_picData = await Config.dict_choice(illusts_list) if illusts_list else logger.debug('会员账号返图R18清单失败')
         one_picData['url'] = one_picData['urls']["1200x1200"]
-        logger.debug('2')
         return one_picData
 
 
@@ -161,10 +164,14 @@ async def get_tagPic_url(tags,sort,r18):
             try:
                 flag += 1
                 if flag > 10:
-                    raise Exception(f"获取api内容失败次数过多，请检查网络链接")
-                res = await client.get(url=url.format(tag=tags, sort=sort, mode='safe' if r18==0 else 'r18', p=random.choice([1,2])), headers=headers, timeout=10)
+                    raise Exception("获取api内容失败次数过多，请检查网络链接")
+                xq_url = url.format(tag=tags, sort=sort, mode='safe' if r18==0 else 'r18', p=random.choice([1,2]))
+                res = await client.get(url=xq_url, headers=headers, timeout=10)
+                logger.debug(f"第一次tag搜索链接：{xq_url}")
                 if not json.loads(unquote(res.text))['body']['illust']['data']:
+                    logger.debug('第一次tag搜索失败，插画data为空')
                     res = await client.get(url=url.format(tag=tags, sort=sort, mode='safe' if r18==0 else 'r18', p=1), headers=headers, timeout=10)
+                    logger.debug(f"第二次tag搜索链接：{url.format(tag=tags, sort=sort, mode='safe' if r18==0 else 'r18', p=1)}")
                 logger.debug(res)
                 if res.status_code == 200:
                     break
