@@ -92,10 +92,10 @@ class Config:
         else: 
             return False
 
-    async def isban_tag(self, data: list):      #从传入tag列表中遍历每个元素去匹配ban_tags列表
+    async def isban_tag(self, data: dict):      #从传入tag列表中遍历每个元素去匹配ban_tags列表
         if data is None:
             return None
-        elif not any(d in self.ban_tags for d in data):
+        elif not any(d in self.ban_tags for d in data['tag']):
             return data
         else: return None
 
