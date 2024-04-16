@@ -8,6 +8,7 @@ from httpx import AsyncClient, TimeoutException, HTTPError
 from nonebot.log import logger
 from tqdm import tqdm
 from urllib.parse import unquote
+import asyncio
 
 
 from .file_tools import Config
@@ -23,12 +24,12 @@ headers = {
 
 http = proxy_http if Config().proxies_switch else None
 socks = proxy_socks if Config().proxies_switch else None
-
+proxies = http if not http else socks
 
 async def is_vip():
     vip_url = 'https://www.pixiv.net/setting_user.php'
     try:
-        async with AsyncClient(proxies=http, transport=socks) as client:
+        async with AsyncClient(proxies=proxies) as client:
             res = await client.get(url=vip_url, headers=headers, timeout=10)
             if res.status_code == 200:
                 if 'ads_hide_pc' in res.text:
@@ -54,7 +55,7 @@ async def is_vip():
 async def get_ArtPic(data):     #通过作品id获取图片url(regular)/width/height
     id = data["id"]
     artword_url = 'https://www.pixiv.net/ajax/illust/{id}/pages?lang=zh'
-    async with AsyncClient(proxies=http, transport=socks) as client:
+    async with AsyncClient(proxies=proxies) as client:
         res = await client.get(url=artword_url.format(id=id), headers=headers, timeout=10)
     response = json.loads(unquote(res.text))
     try:
@@ -72,7 +73,7 @@ async def get_ArtPic(data):     #通过作品id获取图片url(regular)/width/he
 
 async def get_rankpic_url(r18: int ,nums):
     rankpic_url = 'https://www.pixiv.net/ajax/top/illust?mode={mode}&lang=zh'
-    async with AsyncClient(proxies=http, transport=socks) as client:
+    async with AsyncClient(proxies=proxies) as client:
         flag = 0
         while True:
             try:
@@ -106,7 +107,7 @@ async def get_notagPic_url(r18: int ):
     
     vip = Config.get_file_args('ISVIP')
 
-    async with AsyncClient(proxies=http, transport=socks) as client:
+    async with AsyncClient(proxies=proxies) as client:
         flag = 0
         while True:
             try:
@@ -125,6 +126,7 @@ async def get_notagPic_url(r18: int ):
                         logger.info(f"返图url:{notag_vip_url.format(mode = 'r18')}")
                 logger.debug(res)
                 if res.status_code == 200:
+                    response = json.loads(unquote(res.text))
                     break
             except TimeoutException as e:
                 logger.error(f"获取pixiv内容超时{type(e)}")
@@ -132,9 +134,9 @@ async def get_notagPic_url(r18: int ):
                 logger.error(f"{type(e)}")
                 raise e
             except Exception as e:
-                logger.error(f"{e}")
+                logger.error(f"{type(e)}")
                 raise e
-        response = json.loads(unquote(res.text))
+        
         
         if vip == 0:
             id_list = response['body']['recommendedIllusts']
@@ -158,7 +160,7 @@ async def get_notagPic_url(r18: int ):
 
 async def get_tagPic_url(tags,sort,r18):
     url = 'https://www.pixiv.net/ajax/search/illustrations/{tag}?word={tag}&order={sort}&mode={mode}&p={p}&csw=0&s_mode=s_tag&type=illust&lang=zh'
-    async with AsyncClient(proxies=http, transport=socks) as client:
+    async with AsyncClient(proxies=proxies) as client:
         flag = 0
         while True:
             try:
@@ -181,19 +183,23 @@ async def get_tagPic_url(tags,sort,r18):
                 logger.error(f"{type(e)}")
                 raise e
             except Exception as e:
-                logger.error(f"{e}")
+                logger.error(f"{type(e)}")
                 raise e
         response = json.loads(unquote(res.text))
         data_list = response['body']['illust']['data']
-        c = 0
-        while c < 10:
-            one_picData = await Config.dict_choice(data_list)
-            one_picData = await Config().isban_tag(one_picData)
-            if one_picData:
-                break
-            c += 1
-        if c >= 10:
-            one_picData = None
+        try:
+            c = 0
+            while c < 10:
+                one_picData = await Config.dict_choice(data_list)
+                one_picData = await Config().isban_tag(one_picData)
+                if one_picData:
+                    break
+                c += 1
+            if c >= 10:
+                one_picData = None
+        except Exception as e:
+            logger.error(f"获取pixiv内容为空{type(e)}")
+            raise e
         del data_list
         return one_picData
 
@@ -226,14 +232,11 @@ async def get_url(online_switch: int, sort: str = 'date_d', tags: str = "", r18:
 
 
 async def down_pic(one_picData, online_switch: int, r18: int = 0):
-    logger.debug('0')
-    head = {
-        'referer': 'https://www.pixiv.net/',
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
-    }
-    http = proxy_http if Config().proxies_switch else None
-    socks = proxy_socks if Config().proxies_switch else None
-    async with AsyncClient(proxies=http, transport=socks) as client:
+    # head = {
+    #     'referer': 'https://www.pixiv.net/',
+    #     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.36"
+    # }
+    async with AsyncClient(proxies=proxies) as client:
         pbar = tqdm(one_picData, desc='Downloading', colour='green')
         tag_img = ""
         if isinstance(one_picData[0]['url'], str):
@@ -246,16 +249,19 @@ async def down_pic(one_picData, online_switch: int, r18: int = 0):
         pic_saveData = []
         for one_url in one_picData[0]['url']:
             splicing_url = "https://i.pixiv.re/img-master" + one_url[one_url.find("/img/"):]
-            proxy_url = splicing_url
             if "square" in splicing_url:
                 splicing_url = splicing_url.replace("square", "master")
+            if "custom" in splicing_url:
+                splicing_url = splicing_url.replace("custom", "master")
+            proxy_url = splicing_url
             url = proxy_url if Config().proxies_switch else one_url
             while True:
                 try:
                     flag += 1
                     if flag > 10:
                         raise Exception("获取图片内容失败次数过多，请检查网络链接")
-                    response = await client.get(url=url, headers=head, timeout=10)
+                    logger.info(f'开始下载图片：{url}')
+                    response = await client.get(url=url, headers=headers, timeout=15)
                     if response.status_code == 200:
                         if online_switch == 1:
                             down_pic_list.append(f"base64://{base64.b64encode(BytesIO(response.content).getvalue()).decode()}")
@@ -264,12 +270,16 @@ async def down_pic(one_picData, online_switch: int, r18: int = 0):
                         break
                 except TimeoutException as e:
                     logger.error(f"获取图片内容超时: {type(e)}")
+                    await asyncio.sleep(1)
                 except HTTPError as e:
                     logger.error(f"{type(e)}")
+                    await asyncio.sleep(1)
                     raise e
                 except Exception as e:
                     logger.error(f"{e}")
+                    await asyncio.sleep(1)
                     raise e
+                
         pbar.update(1)
         if online_switch == 1:
             img_info = {'pid': pid,

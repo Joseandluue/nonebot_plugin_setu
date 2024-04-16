@@ -121,9 +121,16 @@ class Config:
                 return True
 
     def is_allow(self, event: Event):
-        if isinstance(event, PrivateMessageEvent):
-            return False
-        elif isinstance(event, GroupMessageEvent):
+        if not hasattr(event, 'group_id'):
+            user_id = int(event.get_user_id())
+            print(f'{user_id}正在尝试开启涩图私聊权限')
+            print(f"当前涩图私聊权限清单：{self.white_list['users']}")
+            if user_id in self.white_list['users']:
+                print(f'{user_id}成功开启涩图私聊权限')
+                return True
+            else:
+                return False
+        else:
             if event.group_id in self.white_list['group']:
                 return True
             else:

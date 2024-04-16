@@ -1,4 +1,4 @@
-from httpx_socks import AsyncProxyTransport
+
 from nonebot.log import logger
 
 from .file_tools import Config
@@ -10,7 +10,7 @@ http = proxy_config.get_file_args('PROXIES_HTTP')
 if socks != '':
     logger.info('已配置socks代理,http代理将被忽略')
     proxy_config.set_file_args('PROXIES_SWITCH', 1)
-    proxy_socks = AsyncProxyTransport.from_url(socks)
+    proxy_socks = socks
     proxy_http = None
 elif http != '':
     logger.info('已配置http代理,socks代理将被忽略')

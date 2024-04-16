@@ -45,12 +45,12 @@ driver = get_driver()
 driver.server_app.mount('/setu', setu_api, name='setu_plugin')
 
 ##插件启动时检查cookie会员情况，并写入状态
-def vip():
+async def vip():
     if is_vip():
-        Config.set_file_args('ISVIP',1)
+        await Config.set_file_args('ISVIP',1)
     else:
-        Config.set_file_args('ISVIP',0)
-check_cookie_vip = vip()
+        await Config.set_file_args('ISVIP',0)
+check_cookie_vip =vip()
 
 @setu.handle()
 async def _(bot: Bot, event: Event):
@@ -92,6 +92,9 @@ async def _(bot: Bot, event: Event):
             except httpx.HTTPError:
                 UserDao().delete_user_cd(event.get_user_id())
                 await setu.finish(message=Message('网络错误，请重试'), at_sender=True)
+            except IndexError:
+                UserDao().delete_user_cd(event.get_user_id())
+                await setu.finish(message=Message(f"查不到与 '{tags}' 相关图片，请重试或更换tag"), at_sender=True)
             except Exception as e:
                 UserDao().delete_user_cd(event.get_user_id())
                 await setu.finish(message=Message(f'{e}'), at_sender=True)
